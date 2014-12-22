@@ -1,0 +1,35 @@
+TOP := $(dir $(lastword $(MAKEFILE_LIST)))
+SRC_DIR := $(TOP)src/
+INCLUDE_DIR := $(TOP)include/
+BIN_DIR := $(TOP)bin/
+OBJ_DIR := $(TOP)obj/
+DEPENDS_DIR := $(TOP)depends/
+COMPILER_DIR := $(SRC_DIR)compiler/
+COREWAR_DIR := $(SRC_DIR)corewar/
+
+CC := gcc
+CFLAGS := -c -std=c99 -Wall -D_POSIX_SOURCE
+DEBUG ?= yes
+ifeq ($(DEBUG), yes)
+	CFLAGS+= -g
+else
+	CFLAGS+= -O2
+endif
+CPPFLAGS := -I$(INCLUDE_DIR)
+LDFLAGS :=
+
+LEX := flex
+YACC := bison
+YFLAGS := -d -v -t
+
+$(OBJ_DIR)%.o: %.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+
+%.c: %.l
+	$(LEX) -o $@ $<
+
+%.c: %.y
+	$(YACC) $(YFLAGS) $< -o $@
+
+$(DEPENDS_DIR)%.d: %.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MM -MT $(<:.c=.o) $^ > $@
