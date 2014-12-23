@@ -45,10 +45,10 @@ void	dump_process(process *p)
 {
 	printf("Process : %d\n", p->nb);
 	for (int i = 0; i < REG_NUMBER / 2; i += 2)
-		printf("reg %d : %d reg %d : %d\n", i, p->registers[i], i + 1, p->registers[i + 1]);
-	printf("pc : %d -> ", p->pc);
+		printf("reg %d : %X reg %d : %X\n", i, p->registers[i], i + 1, p->registers[i + 1]);
+	printf("pc : %X -> ", p->pc);
 	for (unsigned int i = 0; i < sizeof(p->instruction); ++i)
-		printf("%d ", p->instruction[i]);
+		printf("%X ", p->instruction[i]);
 	printf("\n");
 	printf("carry : %d\n", p->carry);
 	printf("time : %d\n", p->time);

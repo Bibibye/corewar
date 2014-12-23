@@ -4,7 +4,7 @@ uint32_t	get_time(cell op)
 {
 	if (!op)
 		return 1;
-	else if (op == ADD)
+	else if (op == ADD || op == SUB)
 		return 4;
 	return 1;
 }
@@ -23,6 +23,22 @@ static void	get_size_params(uint8_t params[3], cell param)
 		if (params[i])
 			params[i] = params[i] == REG_PARAM ? REG_SIZE : DIR_SIZE;
 	}
+}
+
+static bool	sub(cell *instruction, vm *v, process *p)
+{
+	(void)v;
+	if (instruction[4] - 1 < 0 || instruction[4] - 1 >= REG_NUMBER)
+		return false;
+	else if (instruction[3] - 1 < 0 || instruction[3] - 1 >= REG_NUMBER)
+		return false;
+	else if (instruction[2] - 1 < 0 || instruction[2] - 1 >= REG_NUMBER)
+		return false;
+	p->registers[instruction[4] - 1] = p->registers[instruction[3] - 1]
+										- p->registers[instruction[2] - 1];
+	p->pc += 5;
+	p->carry = p->registers[instruction[4] - 1] != 0;
+	return true;
 }
 
 static bool	add(cell *instruction, vm *v, process *p)
@@ -67,6 +83,9 @@ bool	execute_op(vm *v, process *p, cell *instruction)
 {
 	switch (instruction[0])
 	{
+		case SUB:
+			return sub(instruction, v, p);
+			break;
 		case ADD:
 			return add(instruction, v, p);
 			break;
