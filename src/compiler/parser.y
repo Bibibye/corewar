@@ -3,37 +3,82 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-    
+#include <stdint.h>
+#include <unistd.h>
+
 #include "lexer.h"
 #include <machine.h>
+#include <instructions.h>
 
 struct header *h;
 FILE *input, *output;
+int32_t size = 0;
+
+struct label {
+    struct label *next;
+    char *s;
+    int32_t value;
+};
+
+struct label *labels = NULL;
+
+void new_label(char *name){
+    struct label *l = malloc (sizeof(*l));
+    l->next = labels;
+    l->s = name;
+    l->value = size;
+    labels = l;
+}
+
+int32_t get_label_value(char *name){
+    for(struct label *it = labels; it != NULL; it = it->next){
+	if(!strcmp(it->s, name))
+	    return it->value;
+    }
+    return -1;
+}
+
+union param_value{
+    int32_t integer;
+    int8_t reg;
+};
+
+struct param{
+    int8_t type;
+    union param_value value;
+};
+
+struct param *new_param(int8_t type){
+    struct param *p = malloc(sizeof(*p));
+    p->type = type;
+    return p;
+}
 
 %}
 
 %union {
-  int integer;
+  int32_t integer;
   char *string;
+  struct param *parameter;
 }
 
 %token <integer> T_REGISTER T_INTEGER
 %token <string> T_LABEL T_MNEMO T_STRING
 %token T_SEPARATOR T_LABEL_CHAR T_DIRECT_CHAR T_NAME T_COMMENT
 
+%type <integer> direct indirect
+%type <parameter> param
+
 %%
 
-s:	instr {}
-	|instr s {}
+s:	s instr {}
+	| {}
 	;
 
-instr: 	T_NAME T_STRING {}
-	|T_COMMENT T_STRING {}
-	|label T_MNEMO params {}
-	|label {}
-	;
-
-label:	T_LABEL T_LABEL_CHAR {}
+instr: 	T_NAME T_STRING {snprintf(h->prog_name, PROG_NAME_LENGTH, "%s", $2);}
+	|T_COMMENT T_STRING {snprintf(h->comment, COMMENT_LENGTH, "%s", $2);}
+	|T_MNEMO params {}
+	|T_LABEL T_LABEL_CHAR {new_label($1);}
 	;
 
 params: param {}
@@ -41,17 +86,17 @@ params: param {}
 	|param T_SEPARATOR param T_SEPARATOR param {}
 	;
 
-param:	T_REGISTER {}
-	|direct {}
-	|indirect {}
+param:	T_REGISTER {$$ = new_param(REG_PARAM); $$->value.reg = $1;}
+	|direct {$$ = new_param(DIR_PARAM); $$->value.reg = $1;}
+	|indirect {$$ = new_param(IND_PARAM); $$->value.reg = $1;}
 	;
 
-direct:	T_DIRECT_CHAR T_INTEGER {}
-	|T_DIRECT_CHAR T_LABEL_CHAR T_LABEL {}
+direct:	T_DIRECT_CHAR T_INTEGER {$$ = $2;}
+	|T_DIRECT_CHAR T_LABEL_CHAR T_LABEL {$$ = get_label_value($3);}
 	;
 
-indirect: 	T_INTEGER {}
-	|T_LABEL_CHAR T_LABEL {}
+indirect: 	T_INTEGER {$$ = $1;}
+	|	T_LABEL_CHAR T_LABEL {$$ = get_label_value($2);}
 	;
 
 %%
@@ -88,7 +133,13 @@ int main(int argc, char **argv) {
 	fprintf(stderr, "Error while opening %s\n", output_name);
 	exit(EXIT_FAILURE);
     }
-    // yyparse();
+    h = malloc(sizeof(*h));
+    h->prog_size = 0;
+    sprintf(h->prog_name, "default");
+    sprintf(h->comment, "default");
+    dup2(fileno(input), fileno(stdin));
+    yyparse();
+    free(h);
     fclose(input);
     fclose(output);
     return EXIT_SUCCESS;
