@@ -22,8 +22,8 @@
 #define DIR_PARAM 0b10
 #define IND_PARAM 0b11
 
-#define encode_parameters(p1, p2, p3) (p1 << 2 | p2 << 4 | p3 << 6)
-#define decode_parameters(code, p) ((code >> p*2) & 0b00000011)
+#define encode_parameters(p1, p2, p3) ((p1) << 2 | (p2) << 4 | (p3) << 6)
+#define decode_parameters(code, p) (((code) >> (p)*2) & 0b00000011)
 
 #define OP_SIZE  1
 #define REG_SIZE 1
