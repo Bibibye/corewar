@@ -5,6 +5,7 @@
 #include "instructions.h"
 #include "vm.h"
 
-bool	execute_op(vm *v, process *p, cell *instruction);
+bool		execute_op(vm *v, process *p, cell *instruction);
+uint32_t	get_time(cell op);
 
 #endif /* !_OP_H_ */

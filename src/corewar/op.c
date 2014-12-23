@@ -1,5 +1,12 @@
 #include "op.h"
 
+uint32_t	get_time(cell op)
+{
+	if (!op)
+		return 1;
+	return 1;
+}
+
 static bool	add(cell *instruction, vm *v, process *p)
 {
 	(void)v;
@@ -11,6 +18,7 @@ static bool	add(cell *instruction, vm *v, process *p)
 		return false;
 	p->registers[instruction[4] - 1] = p->registers[instruction[3] - 1]
 										+ p->registers[instruction[2] - 1];
+	p->pc += 5;
 	return true;
 }
 
@@ -21,8 +29,6 @@ bool	execute_op(vm *v, process *p, cell *instruction)
 		case ADD:
 			return add(instruction, v, p);
 			break;
-		default:
-			return false;
 	}
 	return false;
 }

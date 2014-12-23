@@ -2,6 +2,7 @@
 #include "op.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 process	*init_process(reg number)
 {
@@ -12,6 +13,7 @@ process	*init_process(reg number)
 	tmp->carry = false;
 	tmp->pc = 0;
 	tmp->registers[0] = number;
+	tmp->nb = number;
 	tmp->time = 1;
 	tmp->begin = 0;
 	memset(tmp->instruction, 0, sizeof(tmp->instruction));
@@ -35,7 +37,21 @@ bool	execute_process(vm *v, process *p)
 	if (!execute_op(v, p, p->instruction))
 		return false;
 	memcpy(p->instruction, &v->mem[p->pc], sizeof(p->instruction));
+	p->time = get_time(p->instruction[0]);
 	return true;
+}
+
+void	dump_process(process *p)
+{
+	printf("Process : %d\n", p->nb);
+	for (int i = 0; i < REG_NUMBER / 2; i += 2)
+		printf("reg %d : %d reg %d : %d\n", i, p->registers[i], i + 1, p->registers[i + 1]);
+	printf("pc : %d -> ", p->pc);
+	for (unsigned int i = 0; i < sizeof(p->instruction); ++i)
+		printf("%d ", p->instruction[i]);
+	printf("\n");
+	printf("carry : %d\n", p->carry);
+	printf("time : %d\n", p->time);
 }
 
 queue	*init_queue(process *p)
@@ -114,6 +130,7 @@ void	add_process(vm *v, uint32_t pc)
 	tmp->pc = pc;
 	tmp->begin = pc;
 	memcpy(tmp->instruction, &v->mem[pc], sizeof(tmp->instruction));
+	tmp->time = get_time(tmp->instruction[0]);
 	push_queue(&v->procs, tmp);
 	++v->nb_procs;
 }
@@ -122,8 +139,10 @@ uint32_t	execute_step_vm(vm *v)
 {
 	process		*p = 0;
 	uint32_t	procs = 0;
+	process		*begin = 0;
 
-	while (v->procs)
+	begin = v->procs->proc;
+	do
 	{
 		p = pop_queue(&v->procs);
 		if (execute_process(v, p))
@@ -133,7 +152,18 @@ uint32_t	execute_step_vm(vm *v)
 		}
 		else
 			delete_process(&p);
-	}
+	}while (v->procs && begin != p);
 	v->nb_procs = procs;
 	return procs;
+}
+
+void	dump_vm(vm *v)
+{
+	for (unsigned int i = 0; i < sizeof(v->mem); ++i)
+	{
+		if (!(i % 32))
+			printf("\n%-4X : ", i);
+		printf("%-2X ", v->mem[i]);
+	}
+	printf("\n");
 }
