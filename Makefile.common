@@ -8,7 +8,7 @@ COMPILER_DIR := $(SRC_DIR)compiler/
 COREWAR_DIR := $(SRC_DIR)corewar/
 
 CC := gcc
-CFLAGS := -c -std=c99 -Wall -D_POSIX_SOURCE
+CFLAGS := -c -std=c99 -Wall -D_POSIX_SOURCE -D_GNU_SOURCE
 DEBUG ?= yes
 ifeq ($(DEBUG), yes)
 	CFLAGS+= -g

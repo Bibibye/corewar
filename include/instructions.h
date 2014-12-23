@@ -1,22 +1,22 @@
 #ifndef _INSTRUCTIONS_H_
 #define _INSTRUCTIONS_H_
 
-#define LFORK	0x00
-#define STI	0x01
-#define FORK	0x02
-#define LLD	0x03
-#define LD	0x04
-#define ADD	0x05
-#define ZJMP	0x06
-#define SUB	0x07
-#define LDI	0x08
-#define OR	0x09
-#define ST	0x0A
-#define AFF	0x0B
-#define LIVE	0x0C
-#define XOR	0x0D
-#define LLDI	0x0E
-#define AND	0x0F
+#define LFORK	0x01
+#define STI	0x02
+#define FORK	0x03
+#define LLD	0x04
+#define LD	0x05
+#define ADD	0x06
+#define ZJMP	0x07
+#define SUB	0x08
+#define LDI	0x09
+#define OR	0x0A
+#define ST	0x0B
+#define AFF	0x0C
+#define LIVE	0x0D
+#define XOR	0x0E
+#define LLDI	0x0F
+#define AND	0x10
 
 #define REG_PARAM 0b01
 #define DIR_PARAM 0b10
