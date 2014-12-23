@@ -25,6 +25,18 @@ static void	get_size_params(uint8_t params[3], cell param)
 	}
 }
 
+static bool	zjmp(cell *instruction, vm *v, process *p)
+{
+	(void)v;
+	if (!p->carry)
+	{
+		p->pc += 2 + sizeof(reg);
+		return true;
+	}
+	p->pc = (p->begin + *(reg*)&instruction[2]) % MEM_SIZE;
+	return true;
+}
+
 static bool	sub(cell *instruction, vm *v, process *p)
 {
 	(void)v;
@@ -83,6 +95,9 @@ bool	execute_op(vm *v, process *p, cell *instruction)
 {
 	switch (instruction[0])
 	{
+		case ZJMP:
+			return zjmp(instruction, v, p);
+			break;
 		case SUB:
 			return sub(instruction, v, p);
 			break;
