@@ -12,7 +12,6 @@
 
 struct header *h;
 FILE *input, *output;
-int32_t size = 0;
 
 struct label {
     struct label *next;
@@ -26,7 +25,7 @@ void new_label(char *name){
     struct label *l = malloc (sizeof(*l));
     l->next = labels;
     l->s = name;
-    l->value = size;
+    l->value = h->prog_size;
     labels = l;
 }
 
@@ -54,12 +53,101 @@ struct param *new_param(int8_t type){
     return p;
 }
 
+struct params{
+    unsigned nb_params;
+    int8_t types[3];
+    union param_value values[3];
+    int8_t code;
+};
+
+struct params *new_params1(struct param *p){
+    struct params *ps = malloc(sizeof(*ps));
+    ps->nb_params = 1;
+    ps->types[0] = p->type;
+    ps->values[0] = p->value;
+    ps->code = encode_parameters(p->type, 0, 0);
+    return ps;
+}
+
+struct params *new_params2(struct param *p1, struct param *p2){
+    struct params *ps = malloc(sizeof(*ps));
+    ps->nb_params = 2;
+    ps->types[0] = p1->type;
+    ps->values[0] = p1->value;
+    ps->types[1] = p2->type;
+    ps->values[1] = p2->value;
+    ps->code = encode_parameters(p1->type, p2->type, 0);
+    return ps;
+}
+
+struct params *new_params3(struct param *p1, struct param *p2, struct param *p3){
+    struct params *ps = malloc(sizeof(*ps));
+    ps->nb_params = 3;
+    ps->types[0] = p1->type;
+    ps->values[0] = p1->value;
+    ps->types[1] = p2->type;
+    ps->values[1] = p2->value;
+    ps->types[2] = p3->type;
+    ps->values[2] = p3->value;
+    ps->code = encode_parameters(p1->type, p2->type, p3->type);
+    return ps;
+}
+
+void write_instruction(int8_t mnemo, struct params *p){
+    fwrite(&mnemo, sizeof(int8_t), 1, output);
+    fwrite(&(p->code), sizeof(int8_t), 1, output);
+    h->prog_size += 2;
+    for(int i = 0; i < p->nb_params; ++i){
+	if(p->types[i] == REG_PARAM){
+	    fwrite(&(p->values[i].reg), sizeof(int8_t), 1, output);
+	    h->prog_size += sizeof(int8_t);
+	}
+	else if(p->types[i] == DIR_PARAM || 
+		p->types[i] == IND_PARAM){
+		fwrite(&(p->values[i].integer), sizeof(int32_t), 1, output);
+		h->prog_size += sizeof(int32_t);
+	}
+    }
+}
+
+struct mnemo {
+    int8_t opcode;
+    char *name;
+};
+
+struct mnemo mnemos [] = {
+    {LFORK, "lfork"},
+    {STI, "sti"},
+    {FORK, "fork"},
+    {LLD, "lld"},
+    {LD, "ld"},
+    {ADD, "add"},
+    {ZJMP, "zjmp"},
+    {SUB, "sub"},
+    {LDI, "ldi"},
+    {OR, "or"},
+    {ST, "st"},
+    {AFF, "aff"},
+    {LIVE, "live"},
+    {XOR, "xor"},
+    {LLDI, "lldi"},
+    {AND, "and"}
+};
+
+int8_t get_opcode(char *mnemo){
+    for(int i = 0; i < 16; ++i)
+	if(!strcmp(mnemo, mnemos[i].name))
+	    return mnemos[i].opcode;
+    return 0;
+}
+
 %}
 
 %union {
   int32_t integer;
   char *string;
   struct param *parameter;
+  struct params *parameters;
 }
 
 %token <integer> T_REGISTER T_INTEGER
@@ -68,6 +156,7 @@ struct param *new_param(int8_t type){
 
 %type <integer> direct indirect
 %type <parameter> param
+%type <parameters> params
 
 %%
 
@@ -77,13 +166,13 @@ s:	s instr {}
 
 instr: 	T_NAME T_STRING {snprintf(h->prog_name, PROG_NAME_LENGTH, "%s", $2);}
 	|T_COMMENT T_STRING {snprintf(h->comment, COMMENT_LENGTH, "%s", $2);}
-	|T_MNEMO params {}
+	|T_MNEMO params {write_instruction(get_opcode($1), $2);}
 	|T_LABEL T_LABEL_CHAR {new_label($1);}
 	;
 
-params: param {}
-	|param T_SEPARATOR param {}
-	|param T_SEPARATOR param T_SEPARATOR param {}
+params: param {$$ = new_params1($1);}
+	|param T_SEPARATOR param {$$ = new_params2($1, $3);}
+	|param T_SEPARATOR param T_SEPARATOR param {$$ = new_params3($1, $3, $5);}
 	;
 
 param:	T_REGISTER {$$ = new_param(REG_PARAM); $$->value.reg = $1;}
@@ -138,7 +227,10 @@ int main(int argc, char **argv) {
     sprintf(h->prog_name, "default");
     sprintf(h->comment, "default");
     dup2(fileno(input), fileno(stdin));
+    fseek(output, sizeof(struct header), SEEK_SET);
     yyparse();
+    fseek(output, 0, SEEK_SET);
+    fwrite(h, sizeof(struct header), 1, output);
     free(h);
     fclose(input);
     fclose(output);
