@@ -1,11 +1,13 @@
 include Makefile.common
 
-.PHONY: all compiler corewar
+.PHONY: all compiler corewar clean mrproper
 
 all: compiler corewar
 
 compiler:
 	$(MAKE) -C $(COMPILER_DIR)
+
+corewar:
 	$(MAKE) -C $(COREWAR_DIR)
 
 etags:
