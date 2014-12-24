@@ -160,6 +160,8 @@ uint32_t	execute_step_vm(vm *v)
 		p = pop_queue(&v->procs);
 #if DEBUG
 		dump_process(p);
+		char c;
+		scanf("%c", &c);
 #endif
 		if (execute_process(v, p))
 		{
@@ -167,7 +169,16 @@ uint32_t	execute_step_vm(vm *v)
 			++procs;
 		}
 		else
+		{
+#if DEBUG
+			printf("Illegal instruction at PC = %X : ", p->pc);
+			for (unsigned int i = 0; i < sizeof(p->instruction); ++i)
+				printf("%X ", p->instruction[i]);
+			printf("\n");
+			dump_process(p);
+#endif
 			delete_process(&p);
+		}
 	}while (v->procs && begin != v->procs->proc);
 	v->nb_procs = procs;
 	return procs;

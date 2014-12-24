@@ -1,4 +1,5 @@
 #include "op.h"
+#include <string.h>
 
 uint32_t	get_time(cell op)
 {
@@ -9,100 +10,184 @@ uint32_t	get_time(cell op)
 	return 1;
 }
 
-static void	get_params(uint8_t params[3], cell param)
+static uint32_t	get_offset(uint8_t param, cell *instruction)
 {
-	for (int i = 0; i < 3; ++i)
-		params[i] = decode_parameters(param, i + 1);
+	uint32_t	total = 2;
+
+	for (int i = 0; i < param - 1; ++i)
+		switch (decode_parameters(instruction[1], i + 1))
+		{
+			case REG_PARAM:
+				total += REG_SIZE;
+				break;
+			case DIR_PARAM:
+				total += DIR_SIZE;
+				break;
+			case IND_PARAM:
+				total += IND_SIZE;
+				break;
+		}
+	return total;
 }
 
-static void	get_size_params(uint8_t params[3], cell param)
+static uint32_t	get_size(cell *instruction)
 {
-	for (int i = 0; i < 3; ++i)
+	uint32_t	total = get_offset(3, instruction);
+
+	switch (decode_parameters(instruction[1], 3))
 	{
-		params[i] = decode_parameters(param, i + 1);
-		if (params[i])
-			params[i] = params[i] == REG_PARAM ? REG_SIZE : DIR_SIZE;
+		case REG_PARAM:
+			total += REG_SIZE;
+			break;
+		case DIR_PARAM:
+			total += DIR_SIZE;
+			break;
+		case IND_PARAM:
+			total += IND_SIZE;
+			break;
 	}
+	return total;
 }
 
-static bool	is_reg(cell instruction)
-{
-	return instruction - 1 >= 0 && instruction - 1 < REG_NUMBER;
-}
-
-static cell	get_mem(bool relative, reg instruction, vm *v, process *p)
+static cell	*get_mem(bool relative, reg instruction, vm *v, process *p)
 {
 	uint32_t	rel = relative ? p->begin : 0;
 
-	if ((int32_t)rel + instruction < 0)
-		instruction = instruction + rel + MEM_SIZE;
-	else
-		instruction += rel;
-	return v->mem[(instruction) % MEM_SIZE];
+	while ((int32_t)rel + instruction < 0)
+		instruction += MEM_SIZE;
+	instruction += rel;
+	return &v->mem[(instruction) % MEM_SIZE];
 }
 
-static reg	get_data(bool relative, uint8_t param, cell *instruction, vm *v, process *p)
+static void	copy_mem_to_other(vm *v, cell *dest, cell *src, uint32_t size)
 {
-	reg			tmp = 0;
-	uint8_t		params[3];
-	uint8_t		size[3];
-	uint32_t	total = 0;
+	uint32_t	pos = src - v->mem;
+	for (uint32_t i = 0; i < size; ++i)
+		dest[i] = v->mem[(pos + i) % MEM_SIZE];
+}
 
-	get_params(params, instruction[1]);
-	get_size_params(size, instruction[1]);
-	for (int i = 0; i < param - 1; ++i)
-		total += size[i];
-	if (params[param - 1] == REG_PARAM && is_reg(instruction[2 + total]))
-		tmp = p->registers[instruction[2 + total] - 1];
-	else if (params[param - 1] == DIR_PARAM)
-		tmp = get_param(instruction[2 + total]);
-	else if (params[param - 1] == IND_PARAM)
-		tmp = get_mem(relative, get_param(instruction[2 + total]), v, p);
+static void	copy_other_to_mem(vm *v, cell *dest, cell *src, uint32_t size)
+{
+	uint32_t	pos = dest - v->mem;
+	for (uint32_t i = 0; i < size; ++i)
+		v->mem[(pos + i) % MEM_SIZE] = src[i];
+}
+
+/* static void	copy_mem_to_mem(vm *v, cell *dest, cell *src, uint32_t size) */
+/* { */
+	/* uint32_t	pos1 = src - v->mem; */
+	/* uint32_t	pos2 = dest - v->mem; */
+	/* for (uint32_t i = 0; i < size; ++i) */
+	/* 	v->mem[(pos2 + i) % MEM_SIZE] = v->mem[(pos1 + i) % MEM_SIZE]; */
+/* } */
+
+static t_param	get_param(uint8_t param, cell *instruction, vm *v, process *p)
+{
+	t_param	tmp = {0, 0, 0, 0, 0};
+
+	tmp.type = decode_parameters(instruction[1], param);
+	if (tmp.type == REG_PARAM && is_reg(instruction[get_offset(param, instruction)]))
+	{
+		tmp.size = REG_SIZE;
+		tmp.ptr = (cell*)&p->registers[instruction[get_offset(param, instruction)] - 1];
+		tmp.value = *(reg*)tmp.ptr;
+	}else if (tmp.type == DIR_PARAM)
+	{
+		tmp.size = DIR_SIZE;
+		tmp.ptr = get_mem(false, p->pc + get_offset(param, instruction), v, p);
+		copy_mem_to_other(v, (cell*)&tmp.value, tmp.ptr, tmp.size);
+	}else if (tmp.type == IND_PARAM)
+	{
+		tmp.size = IND_SIZE;
+		tmp.ptr = get_mem(true, instruction[get_offset(param, instruction)], v, p);
+		copy_mem_to_other(v, (cell*)&tmp.value, tmp.ptr, tmp.size);
+	}
+	tmp.v = v;
 	return tmp;
+}
+
+static void	set_param(t_param *param, reg value)
+{
+	switch (param->type)
+	{
+		case REG_PARAM:
+			*(reg*)param->ptr = value;
+			break;
+		case DIR_PARAM:
+		case IND_PARAM:
+			copy_other_to_mem(param->v, param->ptr, (cell*)&value, param->size);
+			break;
+	}
+	param->value = value;
+}
+
+static bool	sti(cell *instruction, vm *v, process *p)
+{
+	t_param	params[3];
+
+	for (int i = 0; i < 3; ++i)
+		params[i] = get_param(i + 1, instruction, v, p);
+	if (params[0].type != REG_PARAM)
+		return false;
+	set_param(&params[0], params[1].value + params[2].value);
+	p->pc += get_size(instruction);
+	return true;
+}
+
+static bool	ldi(cell *instruction, vm *v, process *p)
+{
+	t_param	params[3];
+	reg		value;
+
+	for (int i = 0; i < 3; ++i)
+		params[i] = get_param(i + 1, instruction, v, p);
+	if (params[2].type != REG_PARAM)
+		return false;
+	copy_mem_to_other(v, (cell*)&value, get_mem(true, params[0].value + params[1].value, v, p), REG_SIZE);
+	set_param(&params[2], value);
+	p->pc += get_size(instruction);
+	return true;
 }
 
 static bool	xor(cell *instruction, vm *v, process *p)
 {
-	uint8_t	size[3];
-	reg		pa[2];
+	t_param	params[3];
 
-	get_size_params(size, instruction[1]);
-	if (!is_reg(instruction[2 + size[0] + size[1]]))
+	for (int i = 0; i < 3; ++i)
+		params[i] = get_param(i + 1, instruction, v, p);
+	if (params[2].type != REG_PARAM)
 		return false;
-	for (int i = 0; i < 2; ++i)
-		pa[i] = get_data(true, i + 1, instruction, v, p);
-	p->registers[instruction[2 + size[0] + size[1]]] = pa[0] ^ pa[1];
-	p->carry = (pa[0] ^ pa[1]) != 0;
+	set_param(&params[2], params[0].value ^ params[1].value);
+	p->carry = (params[0].value ^ params[1].value) != 0;
+	p->pc += get_size(instruction);
 	return true;
 }
 
 static bool	and(cell *instruction, vm *v, process *p)
 {
-	uint8_t	size[3];
-	reg		pa[2];
+	t_param	params[3];
 
-	get_size_params(size, instruction[1]);
-	if (!is_reg(instruction[2 + size[0] + size[1]]))
+	for (int i = 0; i < 3; ++i)
+		params[i] = get_param(i + 1, instruction, v, p);
+	if (params[2].type != REG_PARAM)
 		return false;
-	for (int i = 0; i < 2; ++i)
-		pa[i] = get_data(true, i + 1, instruction, v, p);
-	p->registers[instruction[2 + size[0] + size[1]]] = pa[0] & pa[1];
-	p->carry = (pa[0] & pa[1]) != 0;
+	set_param(&params[2], params[0].value & params[1].value);
+	p->carry = (params[0].value & params[1].value) != 0;
+	p->pc += get_size(instruction);
 	return true;
 }
 
 static bool	or(cell *instruction, vm *v, process *p)
 {
-	uint8_t	size[3];
-	reg		pa[2];
+	t_param	params[3];
 
-	get_size_params(size, instruction[1]);
-	if (!is_reg(instruction[2 + size[0] + size[1]]))
+	for (int i = 0; i < 3; ++i)
+		params[i] = get_param(i + 1, instruction, v, p);
+	if (params[2].type != REG_PARAM)
 		return false;
-	for (int i = 0; i < 2; ++i)
-		pa[i] = get_data(true, i + 1, instruction, v, p);
-	p->registers[instruction[2 + size[0] + size[1]]] = pa[0] | pa[1];
-	p->carry = (pa[0] | pa[1]) != 0;
+	set_param(&params[2], params[0].value | params[1].value);
+	p->carry = (params[0].value | params[1].value) != 0;
+	p->pc += get_size(instruction);
 	return true;
 }
 
@@ -111,81 +196,75 @@ static bool	zjmp(cell *instruction, vm *v, process *p)
 	(void)v;
 	if (!p->carry)
 	{
-		p->pc += 2 + sizeof(reg);
+		p->pc += get_size(instruction);
 		return true;
 	}
+	while ((int32_t)p->begin + *(reg*)&instruction[2] < 0)
+		*(reg*)&instruction[2] += MEM_SIZE;
 	p->pc = (p->begin + *(reg*)&instruction[2]) % MEM_SIZE;
 	return true;
 }
 
 static bool	sub(cell *instruction, vm *v, process *p)
 {
-	(void)v;
-	for (int i = 2; i < 5; ++i)
-		if (!is_reg(instruction[i]))
+	t_param	params[3];
+
+	for (int i = 0; i < 3; ++i)
+	{
+		params[i] = get_param(i + 1, instruction, v, p);
+		if (params[i].type != REG_PARAM)
 			return false;
-	p->registers[instruction[4] - 1] = p->registers[instruction[3] - 1]
-										- p->registers[instruction[2] - 1];
-	p->pc += 5;
-	p->carry = p->registers[instruction[4] - 1] != 0;
+	}
+	set_param(&params[2], params[1].value - params[0].value);
+	p->pc += get_size(instruction);
+	p->carry = params[2].value != 0;
 	return true;
 }
 
 static bool	add(cell *instruction, vm *v, process *p)
 {
-	(void)v;
-	for (int i = 2; i < 5; ++i)
-		if (!is_reg(instruction[i]))
+	t_param	params[3];
+
+	for (int i = 0; i < 3; ++i)
+	{
+		params[i] = get_param(i + 1, instruction, v, p);
+		if (params[i].type != REG_PARAM)
 			return false;
-	p->registers[instruction[4] - 1] = p->registers[instruction[3] - 1]
-										+ p->registers[instruction[2] - 1];
-	p->pc += 5;
-	p->carry = p->registers[instruction[4] - 1] != 0;
+	}
+	set_param(&params[2], params[1].value + params[0].value);
+	p->pc += get_size(instruction);
+	p->carry = params[2].value != 0;
 	return true;
 }
 
 static bool	lld(cell *instruction, vm *v, process *p)
 {
-	uint8_t	params[3];
-	uint8_t	size[3];
-
-	get_params(params, instruction[1]);
-	get_size_params(size, instruction[1]);
-	if (!params[0] || !is_reg(instruction[2 + size[0]]))
-		return false;
-	reg	tmp = p->registers[instruction[2 + size[0]] - 1];
-	tmp = get_data(false, 1, instruction, v, p);
-	p->registers[instruction[2 + size[0]] - 1] = tmp;
-	p->pc += (3 + size[0]);
-	p->carry = tmp != 0;
-	return true;
+	(void)instruction;
+	(void)v;
+	(void)p;
+	return false;
 }
 
 static bool	ld(cell *instruction, vm *v, process *p)
 {
-	uint8_t	params[3];
-	uint8_t	size[3];
+	t_param	params[2];
 
-	get_params(params, instruction[1]);
-	get_size_params(size, instruction[1]);
-	if (!params[0] || !is_reg(instruction[2 + size[0]]))
+	for (int i = 0; i < 2; ++i)
+		params[i] = get_param(i + 1, instruction, v, p);
+	if (params[1].type != REG_PARAM)
 		return false;
-	reg	tmp = p->registers[instruction[2 + size[0]] - 1];
-	tmp = get_data(true, 1, instruction, v, p);
-	p->registers[instruction[2 + size[0]] - 1] = tmp;
-	p->pc += (3 + size[0]);
-	p->carry = tmp != 0;
+	set_param(&params[1], params[0].value);
+	p->carry = params[1].value != 0;
+	p->pc += get_size(instruction);
 	return true;
 }
 
 static bool	lfork(cell *instruction, vm *v, process *p)
 {
-	reg	addr = get_data(false, 1, instruction, v, p);
-	uint8_t	size[3];
+	t_param	param = get_param(1, instruction, v, p);
 
-	copy_process(v, p, addr);
-	get_size_params(size, instruction[1]);
-	p->pc += (2 + size[0]);
+	copy_process(v, p, param.value);
+	p->pc += get_size(instruction);
 	return true;
 }
 
@@ -219,6 +298,12 @@ bool	execute_op(vm *v, process *p, cell *instruction)
 			break;
 		case LFORK:
 			return lfork(instruction, v, p);
+			break;
+		case STI:
+			return sti(instruction, v, p);
+			break;
+		case LDI:
+			return ldi(instruction, v, p);
 			break;
 	}
 	return false;

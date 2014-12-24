@@ -5,7 +5,16 @@
 #include "instructions.h"
 #include "vm.h"
 
-#define get_param(a) (*(reg*)&(a))
+#define is_reg(a) ((a) - 1 >= 0 && (a) - 1 < REG_NUMBER)
+
+typedef struct	s_param
+{
+	uint8_t	type;
+	uint8_t	size;
+	reg		value;
+	cell	*ptr;
+	vm		*v;
+}t_param;
 
 bool		execute_op(vm *v, process *p, cell *instruction);
 uint32_t	get_time(cell op);
