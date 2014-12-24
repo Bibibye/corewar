@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 
-process	*init_process(reg number)
+process	*init_process(reg number, reg player)
 {
 	process	*tmp;
 
@@ -12,8 +12,9 @@ process	*init_process(reg number)
 	memset(tmp->registers, 0, sizeof(tmp->registers));
 	tmp->carry = false;
 	tmp->pc = 0;
-	tmp->registers[0] = number;
+	tmp->registers[0] = player;
 	tmp->nb = number;
+	tmp->player = player;
 	tmp->time = 1;
 	tmp->begin = 0;
 	memset(tmp->instruction, 0, sizeof(tmp->instruction));
@@ -43,8 +44,10 @@ bool	execute_process(vm *v, process *p)
 
 void	dump_process(process *p)
 {
-	printf("Process : %d\n", p->nb);
-	for (int i = 0; i < REG_NUMBER / 2; i += 2)
+	if (!p)
+		return;
+	printf("Process : %d (player %d)\n", p->nb, p->player);
+	for (int i = 0; i < REG_NUMBER; i += 2)
 		printf("reg %d : %X reg %d : %X\n", i, p->registers[i], i + 1, p->registers[i + 1]);
 	printf("pc : %X -> ", p->pc);
 	for (unsigned int i = 0; i < sizeof(p->instruction); ++i)
@@ -124,15 +127,25 @@ void	delete_vm(vm **v)
 	*v = 0;
 }
 
-void	add_process(vm *v, uint32_t pc)
+void	add_process(vm *v, reg player, uint32_t pc)
 {
-	process	*tmp = init_process(v->nb_procs);
+	process	*tmp = init_process(v->nb_procs, player);
 	tmp->pc = pc;
 	tmp->begin = pc;
 	memcpy(tmp->instruction, &v->mem[pc], sizeof(tmp->instruction));
 	tmp->time = get_time(tmp->instruction[0]);
 	push_queue(&v->procs, tmp);
 	++v->nb_procs;
+}
+
+void		copy_process(vm *v, process *p, uint32_t pc)
+{
+	process	*tmp;
+
+	add_process(v, p->player, pc);
+	tmp = v->procs->proc;
+	memcpy(tmp->registers, p->registers, sizeof(p->registers));
+	tmp->carry = p->carry;
 }
 
 uint32_t	execute_step_vm(vm *v)
@@ -145,6 +158,9 @@ uint32_t	execute_step_vm(vm *v)
 	do
 	{
 		p = pop_queue(&v->procs);
+#if DEBUG
+		dump_process(p);
+#endif
 		if (execute_process(v, p))
 		{
 			push_queue(&v->procs, p);
@@ -152,7 +168,7 @@ uint32_t	execute_step_vm(vm *v)
 		}
 		else
 			delete_process(&p);
-	}while (v->procs && begin != p);
+	}while (v->procs && begin != v->procs->proc);
 	v->nb_procs = procs;
 	return procs;
 }

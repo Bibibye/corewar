@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+#define DEBUG 1
+
 typedef int32_t			reg;
 typedef int8_t			cell;
 

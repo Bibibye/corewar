@@ -10,6 +10,7 @@ typedef struct vm vm;
 typedef struct	process
 {
 	uint32_t	nb;
+	reg			player;
 	reg			registers[REG_NUMBER];
 	uint32_t	pc;
 	bool		carry;
@@ -18,7 +19,7 @@ typedef struct	process
 	cell		instruction[2 * OP_SIZE + 3 * DIR_SIZE];
 }process;
 
-process	*init_process(reg number);
+process	*init_process(reg number, reg player);
 void	delete_process(process **p);
 bool	execute_process(vm *v, process *p);
 void	dump_process(process *p);
@@ -45,7 +46,8 @@ struct vm
 
 vm			*init_vm(uint32_t nb_players);
 void		delete_vm(vm **v);
-void		add_process(vm *v, uint32_t pc);
+void		add_process(vm *v, reg player, uint32_t pc);
+void		copy_process(vm *v, process *p, uint32_t pc);
 uint32_t	execute_step_vm(vm *v);
 void		dump_vm(vm *v);
 
