@@ -25,6 +25,6 @@ struct	header
 	char		prog_name[PROG_NAME_LENGTH + 1];
 	uint32_t	prog_size;
 	char		comment[COMMENT_LENGTH + 1];
-}__attribute((packed))__;
+}__attribute__((__packed__));
 
 #endif /* !_MACHINE_H_ */

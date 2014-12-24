@@ -1,11 +1,14 @@
 .name "Foo"
 .comment "Bar"
 
-l1:	sti r1,%:l2,%1
-	and r1,%0,r1
+ld %1, r1
+ld %1, r2
+ld %5, r4
 
-l2:	live %1
-	zjmp %:l2
+l1:	add r1, r2, r1
+	ld r1, r3
+	sub r3, r4, r3
+	zjmp %:l1
 
 # Foobar
 # Barfoo
